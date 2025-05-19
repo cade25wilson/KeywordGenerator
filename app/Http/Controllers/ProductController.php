@@ -1,0 +1,131 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Jobs\AnalyzeProduct;
+use App\Models\Product;
+use App\Models\ProductGroup;
+use App\Models\ProductGroupProduct;
+use App\Models\ProductPicture;
+use Exception;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+
+class ProductController extends Controller
+{
+    public function index()
+    {
+        try{
+            $user = Auth::user();
+            $products = Product::where('user_id', $user->id)
+                ->with(['pictures'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return Inertia::render('ProductIndex', [
+                'products' => $products,
+            ]);
+        } catch(Exception $e){
+            Log::error($e->getMessage());
+            return response()->json(['error' => 'An error occurred while retrieving the products.'], 500);
+        }
+    }
+    public function create()
+    {
+        return Inertia::render('ProductCreate');
+    }
+
+    public function store(Request $request)
+    {
+        try{
+            $data = $request->validate([
+                'title' => 'nullable|string|max:255',
+                'images' => 'required|array|min:1',
+                'images.*' => 'image|max:5120',
+                'group_id' => 'nullable|exists:product_groups,id',
+            ]);
+
+            if($data['group_id']) {
+                $group = ProductGroup::find($data['group_id']);
+                if ($group->user_id !== Auth::id()) {
+                    // Return an Inertia error page or redirect
+                    return redirect()->back()->withErrors(['message' => 'Unauthorized']);
+                }
+            }
+
+            $user = Auth::user();
+
+            DB::beginTransaction();
+            
+            $product = Product::create([
+                'user_id' => $user->id,
+                'title' => $request->input('title') ?? '',
+                'description' => '',
+                'platform_data' => json_encode([]),
+            ]);
+
+            foreach ($request->file('images') as $image) {
+                $image = ProductPicture::storeProductPicture($product->id, $image);
+            }
+
+            if ($data['group_id']) {
+                ProductGroupProduct::create([
+                    'product_group_id' => $data['group_id'],
+                    'product_id' => $product->id,
+                ]);
+            }
+            DB::commit();
+
+            // Dispatch AI job
+            // AnalyzeProduct::dispatch($product->id);
+
+            // Return an Inertia redirect with a flash message
+            return redirect()->back()->with('success', 'Product uploaded and queued for analysis.');
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error($e);
+            return redirect()->back()->withErrors(['message' => 'Error uploading product: ' . $e->getMessage()]);
+        } finally {
+            DB::commit();
+        }
+    }
+
+    public function show(string $id)
+    {
+        try{
+            $user = Auth::user();
+            $product = Product::where('id', $id)->with(['pictures'])->firstOrFail();
+
+            if($product->user_id != $user->id){
+                return response()->json(['error' => 'Unauthorized action.'], 403);
+            }
+
+            return Inertia::render('ProductShow', [
+                'product' => $product,
+            ]);
+        } catch(Exception $e){
+            Log::error($e->getMessage());
+            return response()->json(['error' => 'An error occurred while retrieving the product.'], 500);
+        }
+    }
+
+    public function destroy(string $id)
+    {
+        try{
+            $product = Product::where('id', $id)->firstOrFail();
+            if($product->user_id != Auth::id()){
+                return response()->json(['error' => 'Unauthorized action.'], 403);
+            }
+
+            $product->delete();
+
+            return response()->json(['message' => 'Product deleted successfully.'], 200);
+        } catch(Exception $e){
+            Log::error($e->getMessage());
+            return response()->json(['error' => 'An error occurred while deleting the product.'], 500);
+        }
+    }
+}
