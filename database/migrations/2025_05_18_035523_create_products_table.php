@@ -15,10 +15,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('title')->nullable();
-            $table->string('description')->nullable();
-            $table->json('attributes')->nullable();
-            $table->json('platform_data');
-            $table->enum('status', ['processing', 'ready', 'error'])->default('processing');
+            $table->json('platform_data')->nullable();
+            $table->json('keyword_data')->nullable();
+            $table->enum('status', ['processing', 'processed', 'error'])->default('processing');
             $table->timestamps();
         });
     }

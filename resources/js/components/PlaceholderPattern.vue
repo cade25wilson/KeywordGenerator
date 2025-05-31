@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Link, router, usePage } from '@inertiajs/vue3';
+// Use these imports instead of DropdownMenuSub and its children.
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+
+const showMenu = ref(false);
+
+const page = usePage();
 
 const props = defineProps({
     group: {
@@ -14,6 +20,28 @@ const hasImage = computed(() => {
            props.group.randomProductFirstPhoto && 
            props.group.randomProductFirstPhoto.length > 0;
 });
+
+// Dummy handlers for menu actions. Replace with actual logic.
+function onEditClick() {
+  console.log('Edit clicked');
+}
+async function onDeleteClick(delete_products: boolean) {
+    const response = await fetch(`/product-groups/${props.group.id}/${delete_products}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': page.props.csrf_token,
+        },
+    });
+
+    if (response.ok) {
+        // Handle successful deletion
+        console.log('Group deleted successfully');
+        router.reload();
+    } else {
+        // Handle error
+        console.error('Error deleting group');
+    }
+}
 </script>
 
 <template>
@@ -46,6 +74,26 @@ const hasImage = computed(() => {
                     {{ props.group.products?.length || 0 }} Products
                 </span>
             </div>
+        </div>
+
+        <div class="absolute bottom-2 right-2">
+            <DropdownMenu v-model="showMenu">
+                <DropdownMenuTrigger asChild>
+                    <button class="p-2 rounded-full text-white hover:bg-black/20 transition" @click.stop.prevent>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor">
+                            <circle cx="5" cy="12" r="1.5" />
+                            <circle cx="12" cy="12" r="1.5" />
+                            <circle cx="19" cy="12" r="1.5" />
+                        </svg>
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                    <DropdownMenuItem @click="onEditClick" class="cursor-pointer">Edit</DropdownMenuItem>
+                    <DropdownMenuItem class="text-gray-500 cursor-pointer">Add to Favorites</DropdownMenuItem>
+                    <DropdownMenuItem @click="onDeleteClick(false)" class="text-red-600 cursor-pointer">Delete Group</DropdownMenuItem>
+                    <DropdownMenuItem @click="onDeleteClick(true)" class="text-red-600 cursor-pointer">Delete Group And All Items</DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     </Link>
 </template>

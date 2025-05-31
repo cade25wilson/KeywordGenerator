@@ -30,17 +30,17 @@ class ProductPicture extends Model
         ]);
     }
 
-    //delete image from s3 when deleting the model
-    protected static function boot()
-    {
-        parent::boot();
+    // //delete image from s3 when deleting the model
+    // protected static function boot()
+    // {
+    //     parent::boot();
 
-        static::deleting(function ($model) {
-            if ($model->image_path) {
-                Storage::disk('s3')->delete($model->image_path);
-            }
-        });
-    }
+    //     static::deleting(function ($model) {
+    //         if ($model->image_path) {
+    //             Storage::disk('s3')->delete($model->image_path);
+    //         }
+    //     });
+    // }
 
     public function getUrlAttribute()
     {

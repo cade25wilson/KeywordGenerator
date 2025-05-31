@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -36,12 +36,7 @@ const onDeleteClick = () => {
 
     response.then(res => {
         if (res.ok) {
-            //remove product from the list
-            const index = page.props.productGroup.products.findIndex(product => product.id === props.product.id);
-            if (index !== -1) {
-                page.props.productGroup.products.splice(index, 1);
-            }
-
+            router.reload();
         }
     });
 };
@@ -107,12 +102,12 @@ const onRemoveFromGroupClick = () => {
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
-                    <DropdownMenuItem @click="onEditClick">Edit</DropdownMenuItem>
-                    <DropdownMenuItem class="text-gray-500">Add to Favorites</DropdownMenuItem>
-                    <DropdownMenuItem v-if="page.url !== '/products'" @click="onRemoveFromGroupClick" class="text-gray-500">
+                    <DropdownMenuItem class="cursor-pointer" @click="onEditClick">Edit</DropdownMenuItem>
+                    <DropdownMenuItem class="text-gray-500 cursor-pointer">Add to Favorites</DropdownMenuItem>
+                    <DropdownMenuItem v-if="page.url !== '/products'" @click="onRemoveFromGroupClick" class="text-gray-500 cursor-pointer">
                         Remove Product From Group
                     </DropdownMenuItem>
-                    <DropdownMenuItem @click="onDeleteClick" class="text-red-600">Delete Product</DropdownMenuItem>
+                    <DropdownMenuItem @click="onDeleteClick" class="text-red-600 cursor-pointer">Delete Product</DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>

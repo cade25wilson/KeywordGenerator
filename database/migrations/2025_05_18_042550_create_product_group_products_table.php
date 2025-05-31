@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('product_group_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+            $table->unique(['product_group_id', 'product_id']); // composite unique index added here
         });
     }
 

@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
 use App\Models\ProductGroup;
 use App\Models\ProductGroupProduct;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
@@ -85,19 +87,30 @@ class ProductGroupController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(string $id, $delete = false)
     {
-        try{
-            $productGroupProduct = ProductGroupProduct::where('id', $id)->firstOrFail();
-            $productGroup = ProductGroup::where('id', $productGroupProduct->product_group_id)->firstOrFail();
+        $delete = filter_var($delete, FILTER_VALIDATE_BOOLEAN); // Convert to boolean
 
-            if($productGroup->user_id != Auth::id()){
+        try {
+            $productGroup = ProductGroup::where('id', $id)->firstOrFail();
+            
+            if ($productGroup->user_id != Auth::id()) {
                 return response()->json(['error' => 'Unauthorized action.'], 403);
             }
 
-            $productGroupProduct->delete();
-            return response()->noContent(204);
-        } catch(Exception $e){
+            DB::beginTransaction();
+
+            if ($delete) {
+                Product::destroy(ProductGroupProduct::where('product_group_id', $id)
+                                ->pluck('product_id')->toArray());
+            }
+
+            $productGroup->delete();
+            DB::commit();
+
+            return response()->noContent();
+        } catch (Exception $e) {
+            DB::rollBack();
             Log::error($e->getMessage());
             return response()->json(['error' => 'An error occurred while deleting the product group.'], 500);
         }
