@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('title')->nullable();
             $table->json('platform_data')->nullable();
             $table->json('keyword_data')->nullable();
+            $table->json('string')->nullable();
             $table->enum('status', ['processing', 'processed', 'error'])->default('processing');
             $table->timestamps();
         });

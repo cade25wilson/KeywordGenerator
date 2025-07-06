@@ -7,6 +7,7 @@ use Exception;
 use Google\Auth\Credentials\ServiceAccountCredentials;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -32,8 +33,10 @@ class AnalyzeProduct implements ShouldQueue
     public function handle(): void
     {
         $token = $this->getToken();
-        $response = $this->callVertexAPI($token, $this->images);
+        $response = $this->callVertexUnified($token, $this->images);
+        // $csvData = $this->callVertexCsvData($token, $seed);
         $formattedJson = $this->formatJsonResponse($response);
+        Log::info("Formatted JSON Response: " . json_encode($formattedJson, JSON_PRETTY_PRINT));
         $keywordData = $this->analyzeKeywordData($formattedJson['keywords']);
         $this->updateProduct($formattedJson, $keywordData);
     }
@@ -56,10 +59,60 @@ class AnalyzeProduct implements ShouldQueue
         });
     }
     
-    private function callVertexAPI(string $token, array $images)
+    private function callVertexCsvData(string $token, int $seed): Response
     {
         try {
             $parts = [];
+
+            // $parts[] = [
+            //     'fileData' => [
+            //         'mimeType' => 'application/pdf',
+            //         'fileUri'  => 'https://keywordgenerator2.s3.us-east-2.amazonaws.com/product_images/Whatnot+%E2%80%94+CSV+Template+-+Template.pdf',
+            //     ],
+            //     'fileData' => [
+            //         'mimeType' => 'application/pdf',
+            //         'fileUri'  => 'https://keywordgenerator2.s3.us-east-2.amazonaws.com/product_images/Whatnot+%E2%80%94+CSV+Template+-+Values.pdf',
+            //     ],
+            // ];
+
+            $parts[] = [
+                // 'text' => 'using the template above, generate an entry for the previously uploaded product images, the values file will give options for the fields, and the template file will give the structure. Please output this in a minified CSV format without extra whitespace'
+                'text' => 'sorry please remind me what the previous product images were.'
+            ];
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $token,
+                'Content-Type'  => 'application/json',
+            ])->post('https://aiplatform.googleapis.com/v1/projects/keywordgenerator-460202/locations/global/publishers/google/models/gemini-2.5-flash-preview-05-20:generateContent', [
+                'contents' => [
+                    'role'  => 'user',
+                    'parts' => $parts,
+                ],
+                'generationConfig' => [
+                    "temperature" => 1,
+                    "maxOutputTokens" => 65535,
+                    "topP" => 1,
+                    "seed" => $seed,
+                    "thinkingConfig" => [
+                        "thinkingBudget" => 0
+                    ]
+                ]
+            ]);
+
+            return $response;
+        }
+        catch (Exception $e) {
+            Log::error("Error preparing CSV data: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    private function callVertexUnified(string $token, array $images): Response
+    {
+        try {
+            $parts = [];
+
+            // Add product image files
             foreach ($images as $imagePath) {
                 $imageUri = 'https://keywordgenerator2.s3.us-east-2.amazonaws.com/' . $imagePath;
                 $parts[] = [
@@ -70,25 +123,66 @@ class AnalyzeProduct implements ShouldQueue
                 ];
             }
 
+            // Add template and values files (optional but useful)
+            // $parts[] = [
+            //     'fileData' => [
+            //         'mimeType' => 'application/pdf',
+            //         'fileUri'  => 'https://keywordgenerator2.s3.us-east-2.amazonaws.com/product_images/Whatnot+%E2%80%94+CSV+Template+-+Template.pdf',
+            //     ],
+            // ];
+            // $parts[] = [
+            //     'fileData' => [
+            //         'mimeType' => 'application/pdf',
+            //         'fileUri'  => 'https://keywordgenerator2.s3.us-east-2.amazonaws.com/product_images/Whatnot+%E2%80%94+CSV+Template+-+Values.pdf',
+            //     ],
+            // ];
+
+            // Add instruction text to do both tasks
             $parts[] = [
-                'text' => 'Analyze the above product images and generate an SEO optimized title, description, and list of 10 keywords for the product. Please also add another set title, description, and keywords that are optimized for whatnot, one for eBay, and one for Poshmark. Output this in a minified JSON format without extra whitespace, using the following structure: {"title": "SEO Optimized Title", "description": "SEO Optimized Description", "keywords": ["keyword1", "keyword2", ...], "whatnot": {"title": "Whatnot Optimized Title", "description": "Whatnot Optimized Description", "keywords": ["keyword1", "keyword2", ...]}, "ebay": {"title": "eBay Optimized Title", "description": "eBay Optimized Description", "keywords": ["keyword1", "keyword2", ...]}, "poshmark": {"title": "Poshmark Optimized Title", "description": "Poshmark Optimized Description", "keywords": ["keyword1", "keyword2", ...]}}',
+                'text' => <<<EOT
+                Analyze the product images and generate an SEO optimized title, description, and 10 keywords. Also generate platform-specific versions for Whatnot, eBay, and Poshmark with title, description, and keywords.
+
+                Output the response in this JSON format:
+                {
+                "title": "SEO Title",
+                "description": "SEO Description",
+                "keywords": ["keyword1", ...],
+                "whatnot": {
+                    "title": "...", "description": "...", "keywords": [...]
+                },
+                "ebay": {
+                    "title": "...", "description": "...", "keywords": [...]
+                },
+                "poshmark": {
+                    "title": "...", "description": "...", "keywords": [...]
+                }
+                EOT
             ];
 
-            // Send a single request
-            return Http::withHeaders([
+            $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $token,
                 'Content-Type'  => 'application/json',
-            ])->post('https://aiplatform.googleapis.com/v1/projects/keywordgenerator-460202/locations/global/publishers/google/models/gemini-2.5-flash-preview-05-20:generateContent', [
+            ])
+            ->timeout(120) // <-- Set timeout to 120 seconds
+            ->post('https://aiplatform.googleapis.com/v1/projects/keywordgenerator-460202/locations/global/publishers/google/models/gemini-2.5-flash-preview-05-20:generateContent', [
                 'contents' => [
-                    'role'  => 'user',
+                    'role' => 'user',
                     'parts' => $parts,
                 ],
+                'generationConfig' => [
+                    "temperature" => 1,
+                    "maxOutputTokens" => 65535,
+                    "topP" => 1,
+                ]
             ]);
+        
+            return $response;
         } catch (Exception $e) {
-            Log::error("Error calling Vertex API: " . $e->getMessage());
+            Log::error("Error calling unified Vertex API: " . $e->getMessage());
             throw $e;
         }
     }
+
 
     private function formatJsonResponse($response)
     {
@@ -108,6 +202,9 @@ class AnalyzeProduct implements ShouldQueue
         // $this->product->keyword_data = json_encode($keywordData);
         $keywordData = json_decode($keywordData, true);
         $this->product->keyword_data = json_encode($keywordData['data']);
+        // Extract and log/store the CSV string if present
+        // $csvString = $formattedJson['csv'] ?? null;
+        // $this->product->csv_data = json_encode($csvString);
         $this->product->status = 'processed';
         $this->product->save();
     }

@@ -5,6 +5,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductGroupController;
 use App\Http\Controllers\ProductGroupProductController;
 use App\Http\Controllers\TestController;
+use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -40,7 +41,13 @@ Route::prefix('products')->middleware(['auth', 'verified'])->group(function () {
     Route::delete('{id}', [ProductController::class, 'destroy'])->name('products.destroy');
 });
 
-Route::get('/test', [TestController::class, 'index'])->name('test.index');
-
+Route::get('/subscription-checkout', function (Request $request) {
+    return $request->user()
+        ->newSubscription(env('STRIPE_PRODUCT'), env('STRIPE_PRICE'))
+        ->checkout([
+            'success_url' => route('dashboard'),
+            'cancel_url' => route('dashboard'),
+        ]);
+});
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

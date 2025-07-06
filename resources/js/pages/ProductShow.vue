@@ -194,7 +194,7 @@ async function reprocessProduct() {
             <h1 class="text-4xl font-bold">
                 {{ page.props.product.title.charAt(0).toUpperCase() + page.props.product.title.slice(1) }} ({{ page.props.product.status.charAt(0).toUpperCase() + page.props.product.status.slice(1) }})
             </h1>
-            <Button @click="reprocessProduct()" >
+            <Button @click="reprocessProduct()" v-if="page.props.product.status === 'error'">
                 Reprocess Product
             </Button>
         </div>
@@ -236,7 +236,7 @@ async function reprocessProduct() {
                                 </SelectContent>
                             </Select>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent v-if="variantData">
                             <div class="space-y-4">
                                 <div>
                                     <Label>Title</Label>

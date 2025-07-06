@@ -12,6 +12,7 @@ class Product extends Model
         'title',
         'platform_data',
         'keyword_data',
+        'csv_data',
         'status',
     ];
 
